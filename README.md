@@ -1,5 +1,5 @@
-![CI](https://github.com/ps2dev/ps2toolchain/workflows/CI/badge.svg)
-![CI-Docker](https://github.com/ps2dev/ps2toolchain/workflows/CI-Docker/badge.svg)
+![CI](https://github.com/ps2dev/ps2toolchain-dvp/workflows/CI/badge.svg)
+![CI-Docker](https://github.com/ps2dev/ps2toolchain-dvp/workflows/CI-Docker/badge.svg)
 
 # ps2toolchain-dvp
 
