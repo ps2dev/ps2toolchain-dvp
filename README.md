@@ -27,7 +27,7 @@ sudo chown -R $USER: $PS2DEV
 3. Add this to your login script (example: `~/.bash_profile`)  
 ```bash
 export PS2DEV=/usr/local/ps2dev
-export PATH=$PS2DEV/dvp/bin
+export PATH=$PATH:$PS2DEV/dvp/bin
 ```
 
 4. Run toolchain.sh  
