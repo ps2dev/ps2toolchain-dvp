@@ -10,7 +10,7 @@ RUN apk add build-base git bash patch wget texinfo gettext
 RUN cd /src && ./toolchain.sh
 
 # Second stage of Dockerfile
-FROM alpine:latest  
+FROM alpine:latest
 
 ENV PS2DEV /usr/local/ps2dev
 ENV PATH $PATH:${PS2DEV}/dvp/bin
