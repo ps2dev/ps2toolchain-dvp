@@ -23,7 +23,6 @@ else
 fi
 
 TARGET_ALIAS="dvp"
-TARGET="dvp"
 TARG_XTRA_OPTS=""
 OSVER=$(uname)
 
@@ -42,24 +41,29 @@ fi
 ## Determine the maximum number of processes that Make can work with.
 PROC_NR=$(getconf _NPROCESSORS_ONLN)
 
-## Create and enter the toolchain/build directory
-rm -rf "build-$TARGET"
-mkdir "build-$TARGET"
-cd "build-$TARGET"
+## For each target...
+for TARGET in "dvp"; do
+  ## Create and enter the toolchain/build directory
+  rm -rf "build-$TARGET"
+  mkdir "build-$TARGET"
+  cd "build-$TARGET"
 
-## Configure the build.
-../configure \
-  --quiet \
-  --prefix="$PS2DEV/$TARGET_ALIAS" \
-  --target="$TARGET" \
-  --disable-nls \
-  --disable-build-warnings \
-  $TARG_XTRA_OPTS
+  ## Configure the build.
+  ../configure \
+    --quiet \
+    --prefix="$PS2DEV/$TARGET_ALIAS" \
+    --target="$TARGET" \
+    --disable-nls \
+    --disable-build-warnings \
+    $TARG_XTRA_OPTS
 
-## Compile and install.
-make --quiet -j "$PROC_NR" CFLAGS="$CFLAGS -D_FORTIFY_SOURCE=0 -O2 -Wno-implicit-function-declaration" LDFLAGS="$LDFLAGS -s"
-make --quiet -j "$PROC_NR" install
-make --quiet -j "$PROC_NR" clean
+  ## Compile and install.
+  make --quiet -j "$PROC_NR" CFLAGS="$CFLAGS -D_FORTIFY_SOURCE=0 -O2 -Wno-implicit-function-declaration" LDFLAGS="$LDFLAGS -s"
+  make --quiet -j "$PROC_NR" install
+  make --quiet -j "$PROC_NR" clean
 
-## Exit the build directory.
-cd ..
+  ## Exit the build directory.
+  cd ..
+
+  ## End target.
+done
