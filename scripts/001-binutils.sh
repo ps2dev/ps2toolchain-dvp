@@ -25,6 +25,7 @@ TARGET_ALIAS="dvp"
 TARG_XTRA_OPTS=""
 OSVER=$(uname)
 
+# setting lt_cv_sys_max_cmd_len works around ancient libtool bugs
 if [ "${OSVER:0:10}" == MINGW64_NT ]; then
   export lt_cv_sys_max_cmd_len=8000
   export CC=x86_64-w64-mingw32-gcc
@@ -35,6 +36,9 @@ elif [ "${OSVER:0:10}" == MINGW32_NT ]; then
   export CC=i686-w64-mingw32-gcc
   TARG_XTRA_OPTS="--host=i686-w64-mingw32"
   CFLAGS="$CFLAGS -DHAVE_DECL_ASPRINTF -DHAVE_DECL_VASPRINTF"
+elif [ "${OSVER:0:9}" == "CYGWIN_NT" ]; then
+  export lt_cv_sys_max_cmd_len=8000
+  TARG_XTRA_OPTS="--host=x86_64-pc-cygwin"
 fi
 
 ## Determine the maximum number of processes that Make can work with.
