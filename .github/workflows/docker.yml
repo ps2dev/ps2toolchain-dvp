@@ -12,17 +12,21 @@ on:
       - '**.rst'
   workflow_dispatch: {}
   repository_dispatch:
-    types: [run_build]
+    types:
+      - run_build
 
 jobs:
   build:
     env:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      BASE_DOCKER_IMAGE_NAME: ${{ (github.event.repository.name == 'ps2sdk' && 'ps2toolchain') || (github.event.repository.name == 'ps2sdk-ports' && 'ps2sdk') || (github.event.repository.name == 'ps2-packer' && 'ps2sdk') || (github.event.repository.name == 'ps2dev' && 'ps2sdk-ports') || 'none' }}
+    outputs:
+      dest-repo: ${{ steps.dest-repo.outputs.DEST_REPO }}
     strategy:
       matrix:
-        runs-on: [ubuntu-latest, ubuntu-24.04-arm]
+        runs-on:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 180
 
@@ -38,7 +42,7 @@ jobs:
     - name: Use default DOCKER_TAG
       if: startsWith(github.ref, 'refs/tags/') != true
       run: |
-        echo "DOCKER_TAG=latest" >> $GITHUB_ENV
+        printf 'DOCKER_TAG=%s\n' "latest" >> $GITHUB_ENV
 
     - name: Login to DockerHub
       uses: docker/login-action@v3
@@ -64,23 +68,27 @@ jobs:
       run: |
         printf 'DOCKER_TAG_LIST=%s\n' "ghcr.io/${{ github.repository }}:${{ env.DOCKER_TAG }}" >> $GITHUB_ENV
 
+    - name: Prepare additional environment variables from repo
+      run: if test -f ./config/ci-docker-env.ini; then cat ./config/ci-docker-env.ini | sed -e 's/$REPOSITORY_OWNER/'"${{ github.repository_owner }}"'/g;s/$DOCKER_TAG/'"${{ env.DOCKER_TAG }}"'/g' >> $GITHUB_ENV; fi
+
     - name: Build and Push to container registry
       uses: docker/build-push-action@v5
       with:
         push: true
         tags: ${{ env.DOCKER_TAG_LIST }}
         build-args: |
-          BASE_DOCKER_IMAGE=ghcr.io/${{ github.repository_owner }}/${{ env.BASE_DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}
-          BASE_DOCKER_DVP_IMAGE=ghcr.io/${{ github.repository_owner }}/ps2toolchain-dvp:${{ env.DOCKER_TAG }}
-          BASE_DOCKER_IOP_IMAGE=ghcr.io/${{ github.repository_owner }}/ps2toolchain-iop:${{ env.DOCKER_TAG }}
-          BASE_DOCKER_EE_IMAGE=ghcr.io/${{ github.repository_owner }}/ps2toolchain-ee:${{ env.DOCKER_TAG }}
+          BASE_DOCKER_IMAGE
+          BASE_DOCKER_DVP_IMAGE
+          BASE_DOCKER_IOP_IMAGE
+          BASE_DOCKER_EE_IMAGE
 
     - name: Gather information for repository dispatch
       id: dest-repo
       run: if test -f ./config/repository-dispatch.ini; then cat ./config/repository-dispatch.ini >> $GITHUB_OUTPUT; fi
 
   perform-repository-dispatch:
-    needs: [build]
+    needs:
+      - build
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04
@@ -90,9 +98,21 @@ jobs:
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
     strategy:
       matrix:
-        dest-repo: ${{ fromJson(needs.build.outputs.DEST_REPO) }}
+        dest-repo: ${{ fromJson(needs.build.outputs.dest-repo) }}
 
     steps:
+    - name: Gather environment variables (normal)
+      if: github.event_name != 'repository_dispatch'
+      run: |
+        printf 'PAYLOAD_REPO_PARENT_NAME=%s\n' "${{ github.repository }}" >> $GITHUB_ENV
+        printf 'PAYLOAD_REPO_PARENT_SHA=%s\n' "${{ github.sha }}" >> $GITHUB_ENV
+
+    - name: Gather environment variables (dispatch)
+      if: github.event_name == 'repository_dispatch'
+      run: |
+        printf 'PAYLOAD_REPO_PARENT_NAME=%s\n' "${{ github.event.client_payload.parent_name }}" >> $GITHUB_ENV
+        printf 'PAYLOAD_REPO_PARENT_SHA=%s\n' "${{ github.event.client_payload.parent_sha }}" >> $GITHUB_ENV
+
     - name: Send Compile action
       run: |
         export DISPATCH_ACTION="$(printf 'run_build\n')"
@@ -105,7 +125,7 @@ jobs:
         repository: ${{ github.repository_owner }}/${{ matrix.dest-repo }}
         token: ${{ secrets.DISPATCH_TOKEN }}
         event-type: ${{ env.NEW_DISPATCH_ACTION }}
-        client-payload: '{"ref": "${{ github.ref }}"}'
+        client-payload: '{"ref": "${{ github.ref }}", "parent_name": "${{ env.PAYLOAD_REPO_PARENT_NAME }}", "parent_sha": "${{ env.PAYLOAD_REPO_PARENT_SHA }}"}'
 
     - name: Repository Dispatch to specific ${{ matrix.dest-repo }}
       uses: peter-evans/repository-dispatch@v3
@@ -114,4 +134,4 @@ jobs:
         repository: ${{ matrix.dest-repo }}
         token: ${{ secrets.DISPATCH_TOKEN }}
         event-type: ${{ env.NEW_DISPATCH_ACTION }}
-        client-payload: '{"ref": "${{ github.ref }}"}'
+        client-payload: '{"ref": "${{ github.ref }}", "parent_name": "${{ env.PAYLOAD_REPO_PARENT_NAME }}", "parent_sha": "${{ env.PAYLOAD_REPO_PARENT_SHA }}"}'
