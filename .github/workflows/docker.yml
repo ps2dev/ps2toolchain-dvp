@@ -20,7 +20,6 @@ jobs:
     env:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      BASE_DOCKER_IMAGE_NAME: ${{ (github.event.repository.name == 'ps2sdk' && 'ps2toolchain') || (github.event.repository.name == 'ps2sdk-ports' && 'ps2sdk') || (github.event.repository.name == 'ps2-packer' && 'ps2sdk') || (github.event.repository.name == 'ps2dev' && 'ps2sdk-ports') || 'none' }}
     outputs:
       dest-repo: ${{ steps.dest-repo.outputs.DEST_REPO }}
     strategy:
@@ -69,16 +68,19 @@ jobs:
       run: |
         printf 'DOCKER_TAG_LIST=%s\n' "ghcr.io/${{ github.repository }}:${{ env.DOCKER_TAG }}" >> $GITHUB_ENV
 
+    - name: Prepare additional environment variables from repo
+      run: if test -f ./config/ci-docker-env.ini; then cat ./config/ci-docker-env.ini | sed -e 's/$REPOSITORY_OWNER/'"${{ github.repository_owner }}"'/g;s/$DOCKER_TAG/'"${{ env.DOCKER_TAG }}"'/g' >> $GITHUB_ENV; fi
+
     - name: Build and Push to container registry
       uses: docker/build-push-action@v5
       with:
         push: true
         tags: ${{ env.DOCKER_TAG_LIST }}
         build-args: |
-          BASE_DOCKER_IMAGE=ghcr.io/${{ github.repository_owner }}/${{ env.BASE_DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}
-          BASE_DOCKER_DVP_IMAGE=ghcr.io/${{ github.repository_owner }}/ps2toolchain-dvp:${{ env.DOCKER_TAG }}
-          BASE_DOCKER_IOP_IMAGE=ghcr.io/${{ github.repository_owner }}/ps2toolchain-iop:${{ env.DOCKER_TAG }}
-          BASE_DOCKER_EE_IMAGE=ghcr.io/${{ github.repository_owner }}/ps2toolchain-ee:${{ env.DOCKER_TAG }}
+          BASE_DOCKER_IMAGE
+          BASE_DOCKER_DVP_IMAGE
+          BASE_DOCKER_IOP_IMAGE
+          BASE_DOCKER_EE_IMAGE
 
     - name: Gather information for repository dispatch
       id: dest-repo
