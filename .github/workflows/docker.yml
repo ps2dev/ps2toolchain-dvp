@@ -101,6 +101,18 @@ jobs:
         dest-repo: ${{ fromJson(needs.build.outputs.dest-repo) }}
 
     steps:
+    - name: Gather environment variables (normal)
+      if: github.event_name != 'repository_dispatch'
+      run: |
+        printf 'PAYLOAD_REPO_PARENT_NAME=%s\n' "${{ github.repository }}" >> $GITHUB_ENV
+        printf 'PAYLOAD_REPO_PARENT_SHA=%s\n' "${{ github.sha }}" >> $GITHUB_ENV
+
+    - name: Gather environment variables (dispatch)
+      if: github.event_name == 'repository_dispatch'
+      run: |
+        printf 'PAYLOAD_REPO_PARENT_NAME=%s\n' "${{ github.event.client_payload.parent_name }}" >> $GITHUB_ENV
+        printf 'PAYLOAD_REPO_PARENT_SHA=%s\n' "${{ github.event.client_payload.parent_sha }}" >> $GITHUB_ENV
+
     - name: Send Compile action
       run: |
         export DISPATCH_ACTION="$(printf 'run_build\n')"
@@ -113,7 +125,7 @@ jobs:
         repository: ${{ github.repository_owner }}/${{ matrix.dest-repo }}
         token: ${{ secrets.DISPATCH_TOKEN }}
         event-type: ${{ env.NEW_DISPATCH_ACTION }}
-        client-payload: '{"ref": "${{ github.ref }}"}'
+        client-payload: '{"ref": "${{ github.ref }}", "parent_name": "${{ env.PAYLOAD_REPO_PARENT_NAME }}", "parent_sha": "${{ env.PAYLOAD_REPO_PARENT_SHA }}"}'
 
     - name: Repository Dispatch to specific ${{ matrix.dest-repo }}
       uses: peter-evans/repository-dispatch@v3
@@ -122,4 +134,4 @@ jobs:
         repository: ${{ matrix.dest-repo }}
         token: ${{ secrets.DISPATCH_TOKEN }}
         event-type: ${{ env.NEW_DISPATCH_ACTION }}
-        client-payload: '{"ref": "${{ github.ref }}"}'
+        client-payload: '{"ref": "${{ github.ref }}", "parent_name": "${{ env.PAYLOAD_REPO_PARENT_NAME }}", "parent_sha": "${{ env.PAYLOAD_REPO_PARENT_SHA }}"}'
