@@ -46,6 +46,11 @@ jobs:
     - name: Prepare additional environment variables from repo
       run: if test -f ./config/ci-docker-env.ini; then cat ./config/ci-docker-env.ini | sed -e 's/$REPOSITORY_OWNER/'"${{ github.repository_owner }}"'/g;s/$DOCKER_TAG/'"${{ env.DOCKER_TAG }}"'/g' >> $GITHUB_ENV; fi
 
+    - name: Extract DOCKER_TAG using tag name
+      if: env.BUILD_ARGS_LIST != null
+      run: |
+        printf 'BUILD_ARGS_LIST_NEWLINES<<EOF\n%s\nEOF\n' "${{ env.BUILD_ARGS_LIST }}" | tr ' ' $'\n' >> $GITHUB_ENV
+    
     - name: Docker meta
       id: meta
       uses: docker/metadata-action@v5
@@ -63,11 +68,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         tags: ghcr.io/${{ github.repository }}
         outputs: type=image,push-by-digest=true,name-canonical=true,push=true
-        build-args: |
-          BASE_DOCKER_IMAGE
-          BASE_DOCKER_DVP_IMAGE
-          BASE_DOCKER_IOP_IMAGE
-          BASE_DOCKER_EE_IMAGE
+        build-args: ${{ env.BUILD_ARGS_LIST_NEWLINES }}
 
     - name: Export digest
       run: |
