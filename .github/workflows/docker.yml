@@ -17,22 +17,113 @@ on:
 
 jobs:
   build:
-    env:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-    outputs:
-      dest-repo: ${{ steps.dest-repo.outputs.DEST_REPO }}
     strategy:
       matrix:
-        runs-on:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-    runs-on: ${{ matrix.runs-on }}
+        platform:
+          - runs-on: ubuntu-latest
+            container-platform: linux/amd64
+          - runs-on: ubuntu-24.04-arm
+            container-platform: linux/arm64
+    runs-on: ${{ matrix.platform.runs-on }}
     timeout-minutes: 180
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Prepare
+      run: |
+        platform=${{ matrix.platform.container-platform }}
+        printf 'PLATFORM_PAIR=%s\n' "${platform//\//-}" >> $GITHUB_ENV
+
+    - name: Login to Github Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Prepare additional environment variables from repo
+      run: if test -f ./config/ci-docker-env.ini; then cat ./config/ci-docker-env.ini | sed -e 's/$REPOSITORY_OWNER/'"${{ github.repository_owner }}"'/g;s/$DOCKER_TAG/'"${{ env.DOCKER_TAG }}"'/g' >> $GITHUB_ENV; fi
+
+    - name: Extract DOCKER_TAG using tag name
+      if: env.BUILD_ARGS_LIST != null
+      run: |
+        printf 'BUILD_ARGS_LIST_NEWLINES<<EOF\n%s\nEOF\n' "${{ env.BUILD_ARGS_LIST }}" | tr ' ' $'\n' >> $GITHUB_ENV
+    
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and Push to container registry
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        platforms: ${{ matrix.platform.container-platform }}
+        labels: ${{ steps.meta.outputs.labels }}
+        tags: ghcr.io/${{ github.repository }}
+        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+        build-args: ${{ env.BUILD_ARGS_LIST_NEWLINES }}
+
+    - name: Export digest
+      run: |
+        mkdir -p ${{ runner.temp }}/digests
+        digest="${{ steps.build.outputs.digest }}"
+        touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+    - name: Upload digest
+      uses: actions/upload-artifact@v4
+      with:
+        name: digests-${{ env.PLATFORM_PAIR }}
+        path: ${{ runner.temp }}/digests/*
+        if-no-files-found: error
+        retention-days: 1
+
+  merge:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+    outputs:
+      dest-repo: ${{ steps.dest-repo.outputs.DEST_REPO }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Ubuntu packages
+      run: |
+        sudo apt-get -y update
+        sudo apt-get -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' install jq
+
+    - name: Download digests
+      uses: actions/download-artifact@v4
+      with:
+        path: ${{ runner.temp }}/digests
+        pattern: digests-*
+        merge-multiple: true
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v3
+      if: env.DOCKER_USERNAME != null
+      with:
+        username: ${{ env.DOCKER_USERNAME }}
+        password: ${{ env.DOCKER_PASSWORD }}
+
+    - name: Login to Github Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Extract DOCKER_TAG using tag name
       if: startsWith(github.ref, 'refs/tags/')
@@ -44,43 +135,35 @@ jobs:
       run: |
         printf 'DOCKER_TAG=%s\n' "latest" >> $GITHUB_ENV
 
-    - name: Login to DockerHub
-      uses: docker/login-action@v3
-      if: env.DOCKER_USERNAME != null
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Login to Github Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Set docker tag list to include DockerHub if credentials available
       if: env.DOCKER_USERNAME != null
       run: |
-        printf 'DOCKER_TAG_LIST=%s\n' "ghcr.io/${{ github.repository }}:${{ env.DOCKER_TAG }},${{ github.repository }}:${{ env.DOCKER_TAG }}" >> $GITHUB_ENV
+        printf 'DOCKER_CONTAINER_LIST<<EOF\n%s\nEOF\n' "ghcr.io/${{ github.repository }}"$'\n'"${{ github.repository }}" >> $GITHUB_ENV
 
     - name: Set docker tag list to not include DockerHub if credentials not available
       if: env.DOCKER_USERNAME == null
       run: |
-        printf 'DOCKER_TAG_LIST=%s\n' "ghcr.io/${{ github.repository }}:${{ env.DOCKER_TAG }}" >> $GITHUB_ENV
+        printf 'DOCKER_CONTAINER_LIST<<EOF\n%s\nEOF\n' "ghcr.io/${{ github.repository }}" >> $GITHUB_ENV
 
-    - name: Prepare additional environment variables from repo
-      run: if test -f ./config/ci-docker-env.ini; then cat ./config/ci-docker-env.ini | sed -e 's/$REPOSITORY_OWNER/'"${{ github.repository_owner }}"'/g;s/$DOCKER_TAG/'"${{ env.DOCKER_TAG }}"'/g' >> $GITHUB_ENV; fi
-
-    - name: Build and Push to container registry
-      uses: docker/build-push-action@v5
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5
       with:
-        push: true
-        tags: ${{ env.DOCKER_TAG_LIST }}
-        build-args: |
-          BASE_DOCKER_IMAGE
-          BASE_DOCKER_DVP_IMAGE
-          BASE_DOCKER_IOP_IMAGE
-          BASE_DOCKER_EE_IMAGE
+        images: ${{ env.DOCKER_CONTAINER_LIST }}
+        tags: |
+          type=raw,value=${{ env.DOCKER_TAG }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Create manifest list and push
+      working-directory: ${{ runner.temp }}/digests
+      run: |
+        docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+
+    - name: Inspect image
+      run: |
+        docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
 
     - name: Gather information for repository dispatch
       id: dest-repo
@@ -88,7 +171,7 @@ jobs:
 
   perform-repository-dispatch:
     needs:
-      - build
+      - merge
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04
@@ -98,7 +181,7 @@ jobs:
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
     strategy:
       matrix:
-        dest-repo: ${{ fromJson(needs.build.outputs.dest-repo) }}
+        dest-repo: ${{ fromJson(needs.merge.outputs.dest-repo) }}
 
     steps:
     - name: Gather environment variables (normal)
