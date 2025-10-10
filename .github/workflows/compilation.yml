@@ -10,7 +10,9 @@ on:
       - '**.md'
       - '**.rst'
   repository_dispatch:
-    types: [run_build, run_release]
+    types:
+      - run_build
+      - run_release
   workflow_dispatch: {}
 env:
   HOMEBREW_NO_ANALYTICS: 1

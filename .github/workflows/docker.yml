@@ -12,7 +12,8 @@ on:
       - '**.rst'
   workflow_dispatch: {}
   repository_dispatch:
-    types: [run_build]
+    types:
+      - run_build
 
 jobs:
   build:
@@ -22,7 +23,9 @@ jobs:
       BASE_DOCKER_IMAGE_NAME: ${{ (github.event.repository.name == 'ps2sdk' && 'ps2toolchain') || (github.event.repository.name == 'ps2sdk-ports' && 'ps2sdk') || (github.event.repository.name == 'ps2-packer' && 'ps2sdk') || (github.event.repository.name == 'ps2dev' && 'ps2sdk-ports') || 'none' }}
     strategy:
       matrix:
-        runs-on: [ubuntu-latest, ubuntu-24.04-arm]
+        runs-on:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 180
 
@@ -80,7 +83,8 @@ jobs:
       run: if test -f ./config/repository-dispatch.ini; then cat ./config/repository-dispatch.ini >> $GITHUB_OUTPUT; fi
 
   perform-repository-dispatch:
-    needs: [build]
+    needs:
+      - build
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04
