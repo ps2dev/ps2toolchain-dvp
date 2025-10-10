@@ -21,6 +21,8 @@ jobs:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       BASE_DOCKER_IMAGE_NAME: ${{ (github.event.repository.name == 'ps2sdk' && 'ps2toolchain') || (github.event.repository.name == 'ps2sdk-ports' && 'ps2sdk') || (github.event.repository.name == 'ps2-packer' && 'ps2sdk') || (github.event.repository.name == 'ps2dev' && 'ps2sdk-ports') || 'none' }}
+    outputs:
+      dest-repo: ${{ steps.dest-repo.outputs.DEST_REPO }}
     strategy:
       matrix:
         runs-on:
@@ -94,7 +96,7 @@ jobs:
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
     strategy:
       matrix:
-        dest-repo: ${{ fromJson(needs.build.outputs.DEST_REPO) }}
+        dest-repo: ${{ fromJson(needs.build.outputs.dest-repo) }}
 
     steps:
     - name: Send Compile action
