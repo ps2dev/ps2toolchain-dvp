@@ -21,7 +21,7 @@ This program will automatically build and install a DVP compiler, which is used 
 
 ## What these scripts do
 
-These scripts download (with `git clone`) and install [binutils 2.45.0](http://www.gnu.org/software/binutils/ "binutils") (dvp).
+These scripts download (with `git clone`) and install [binutils 2.45.1](http://www.gnu.org/software/binutils/ "binutils") (dvp).
 
 ## Requirements
 
