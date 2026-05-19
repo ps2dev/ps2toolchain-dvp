@@ -6,7 +6,7 @@ ENV PATH   $PATH:${PS2DEV}/dvp/bin
 
 COPY . /src
 
-RUN apk add build-base bash gcc git make flex bison texinfo gmp-dev mpfr-dev mpc1-dev
+RUN apk add build-base bash gcc git make flex bison texinfo gmp-dev mpfr-dev mpc1-dev cmake
 RUN cd /src && ./toolchain.sh
 
 # Second stage of Dockerfile
