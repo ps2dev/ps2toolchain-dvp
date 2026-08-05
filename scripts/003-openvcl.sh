@@ -31,7 +31,11 @@ else
 fi
 
 ## Determine the maximum number of processes that Make can work with.
-PROC_NR=$(getconf _NPROCESSORS_ONLN)
+if [ "$(uname)" = "OpenBSD" ]; then
+    PROC_NR=$(sysctl -n hw.ncpu)
+else
+    PROC_NR=$(getconf _NPROCESSORS_ONLN)
+fi
 
 ## Configure, build, and install.
 cmake -S "$REPO_FOLDER" -B "$REPO_FOLDER/build" \
