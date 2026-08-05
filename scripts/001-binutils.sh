@@ -50,8 +50,17 @@ if [ "$(uname -s)" = "Darwin" ]; then
   fi
 fi
 
+# If using OpenBSD, set the paths accordingly
+if [ "$(uname)" = "OpenBSD" ]; then
+    TARG_XTRA_OPTS="--with-gmp=/usr/local --with-mpfr=/usr/local --with-mpc=/usr/local"
+fi
+
 ## Determine the maximum number of processes that Make can work with.
-PROC_NR=$(getconf _NPROCESSORS_ONLN)
+if [ "$(uname)" = "OpenBSD" ]; then
+    PROC_NR=$(sysctl -n hw.ncpu)
+else
+    PROC_NR=$(getconf _NPROCESSORS_ONLN)
+fi
 
 ## For each target...
 for TARGET in "dvp"; do
@@ -69,10 +78,18 @@ for TARGET in "dvp"; do
     --disable-build-warnings \
     $TARG_XTRA_OPTS
 
+
+  ## Force use of GNU make on OpenBSD
+  if [ "$(uname)" = "OpenBSD" ]; then
+    MAKE=gmake
+  else
+    MAKE=make
+  fi
+
   ## Compile and install.
-  make --quiet -j "$PROC_NR" CFLAGS="$CFLAGS -Wno-implicit-function-declaration"
-  make --quiet -j "$PROC_NR" install
-  make --quiet -j "$PROC_NR" clean
+  $MAKE --quiet -j "$PROC_NR" CFLAGS="$CFLAGS -Wno-implicit-function-declaration"
+  $MAKE --quiet -j "$PROC_NR" install
+  $MAKE --quiet -j "$PROC_NR" clean
 
   ## Exit the build directory.
   cd ..
